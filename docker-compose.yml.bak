@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # Apache Spark (Master)
+  spark-master:
+    image: bitnami/spark:latest
+    container_name: spark-master
+    ports:
+      - "8080:8080"  # Spark Master Web UI
+      - "7077:7077"  # Spark Master port
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+    volumes:
+      - ./spark-data:/opt/spark-data  # Persistent storage for Spark data
+    networks:
+      - movielens-net
+
+  # Apache Spark (Worker)
+  spark-worker:
+    image: bitnami/spark:latest
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER=spark://spark-master:7077
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2g
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+    volumes:
+      - ./spark-data:/opt/spark-data
+    networks:
+      - movielens-net
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=your_elastic_password  # Change this to a secure password
+    ports:
+      - "9200:9200"  # Elasticsearch REST API
+      - "9300:9300"  # Elasticsearch transport
+    volumes:
+      - es-data:/usr/share/elasticsearch/data  # Persistent storage for Elasticsearch
+    networks:
+      - movielens-net
+
+  # Kibana
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: kibana
+    depends_on:
+      - elasticsearch
+    ports:
+      - "5601:5601"  # Kibana Web UI
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=your_elastic_password  # Match with Elasticsearch
+    networks:
+      - movielens-net
+
+  # Flask/FastAPI Application
+app:
+  build:
+    context: .
+    dockerfile: Dockerfile
+  container_name: app
+  depends_on:
+    - elasticsearch
+    - spark-master
+  ports:
+    - "5000:5000"
+  volumes:
+    - ./app:/app
+  command: "python preprocess.py"  # Override CMD to run preprocess.py
+  networks:
+    - movielens-net
+
+networks:
+  movielens-net:
+    driver: bridge
+
+volumes:
+  spark-data:
+  es-data:

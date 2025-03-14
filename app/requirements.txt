@@ -1,0 +1,5 @@
+pyspark==3.5.1
+numpy
+pyspark==3.5.1
+numpy
+flask
